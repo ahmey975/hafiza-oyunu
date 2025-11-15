@@ -1,10 +1,11 @@
-const CACHE_NAME = 'murat-sener-memory-game-cache-v1';
+const CACHE_NAME = 'murat-sener-drift-game-cache-v1';
 const urlsToCache = [
-    '/HafizaOyunu.html',
-    'https://i.imgur.com/KPkEoOK.png', // Oyun logosu
-    'https://www.bensound.com/bensound-music/bensound-sunny.mp3', // Arkaplan müziği
-    'https://fonts.googleapis.com/css2?family=Poppins:wght@400;700;900&display=swap', // Google fontları (CSS)
-    'https://fonts.gstatic.com/s/poppins/v20/pxiByp8kv8JHgFVrLCzLEpk.woff2', // Poppins fontunun kendisi (Woff2 formatı)
+    '/ArabaOyunu.html',
+    '/manifest.json',
+    '/car-icon-192x192.png', // Uygulama ikonları
+    '/car-icon-512x512.png',
+    'https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700;800&display=swap', // Google fontları (CSS)
+    'https://fonts.gstatic.com/s/opensans/v27/mem8YaGs126MiZpBA-UFVZ0e.woff2' // Open Sans fontunun kendisi
 ];
 
 self.addEventListener('install', event => {
@@ -23,12 +24,11 @@ self.addEventListener('fetch', event => {
         caches.match(event.request)
             .then(response => {
                 if (response) {
-                    console.log('Service Worker: Fetching from Cache: ', event.request.url);
-                    return response;
+                    return response; // Önbellekte varsa önbellekten döndür
                 }
-                console.log('Service Worker: Fetching from Network: ', event.request.url);
-                return fetch(event.request)
+                return fetch(event.request) // Yoksa ağdan çek
                     .then(networkResponse => {
+                        // Ağdan gelen başarılı yanıtı önbelleğe al
                         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
                             const responseToCache = networkResponse.clone();
                             caches.open(CACHE_NAME)
@@ -39,8 +39,10 @@ self.addEventListener('fetch', event => {
                         return networkResponse;
                     })
                     .catch(() => {
+                        // Hem önbellekte yoksa hem de ağ hatası varsa
                         console.log('Service Worker: Fetch failed and no cache match for ', event.request.url);
-                        return new Response('Offline content is not available and no network connection.', {status: 503});
+                        // Hata sayfası veya offline mesajı döndürebilirsiniz
+                        return new Response('Bu içerik çevrimdışı kullanılamıyor.', {status: 503});
                     });
             })
     );
@@ -53,6 +55,7 @@ self.addEventListener('activate', event => {
         caches.keys().then(cacheNames => {
             return Promise.all(
                 cacheNames.map(cacheName => {
+                    // Yeni olmayan önbellekleri sil
                     if (cacheWhitelist.indexOf(cacheName) === -1) {
                         console.log('Service Worker: Deleting old cache: ', cacheName);
                         return caches.delete(cacheName);

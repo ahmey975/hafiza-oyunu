@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Murat Şener Drift Yarışı</title>
+    
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2196f3">
+
+    <style>
+        /* Genel Stil */
+        body, html {
+            margin: 0; padding: 0; overflow: hidden; height: 100%; width: 100%;
+            font-family: 'Open Sans', sans-serif; background-color: #333; color: #eee;
+            user-select: none; /* Metin seçmeyi engelle */
+            -webkit-tap-highlight-color: transparent; /* Mobil dokunuş vurgusunu kaldır */
+        }
+
+        /* Oyun Kapsayıcısı */
+        #game-container {
+            position: relative; width: 100vw; height: 100vh;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+
+        /* Oyun Alanı (Canvas) */
+        #gameCanvas {
+            background-color: #222; /* Pistin etrafı */
+            border: 2px solid #555;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            max-width: 98%; max-height: 80%;
+            display: block; /* Gereksiz boşlukları kaldır */
+        }
+
+        /* Bilgi Paneli (Skor, Hız vb.) */
+        #info-panel {
+            position: absolute; top: 0; left: 0; width: 100%;
+            padding: 10px; background-color: rgba(0, 0, 0, 0.7);
+            display: flex; justify-content: space-around; align-items: center;
+            font-size: clamp(14px, 3.5vw, 18px); font-weight: bold; z-index: 10;
+        }
+        .info-item span { color: #fdd835; } /* Sarı vurgu */
+
+        /* Mobil Kontroller */
+        #controls {
+            position: absolute; bottom: 0; width: 100%;
+            display: flex; justify-content: space-between; padding: 10px;
+            box-sizing: border-box; z-index: 10;
+        }
+        .control-group {
+            display: flex; gap: 5px; /* Düğmeler arası boşluk */
+        }
+        .control-button {
+            background-color: rgba(0, 0, 0, 0.6); color: #fff;
+            border: 2px solid #666; border-radius: 50%;
+            width: clamp(60px, 16vw, 80px); height: clamp(60px, 16vw, 80px);
+            display: flex; justify-content: center; align-items: center;
+            font-size: clamp(20px, 6vw, 30px); cursor: pointer;
+            transition: background-color 0.1s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+        }
+        .control-button:active {
+            background-color: rgba(0, 0, 0, 0.9);
+            border-color: #eee;
+        }
+
+        /* Başlangıç ve Bitiş Ekranları */
+        .overlay-screen {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.9); color: white;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 20; text-align: center;
+            padding: 20px; box-sizing: border-box;
+        }
+        .overlay-screen h1 { font-size: clamp(30px, 9vw, 50px); margin-bottom: 20px; }
+        .overlay-screen p { font-size: clamp(16px, 4vw, 22px); margin-bottom: 30px; }
+        .overlay-screen button {
+            padding: 15px 30px; font-size: clamp(18px, 5vw, 24px);
+            background-color: #2196f3; color: white; border: none; border-radius: 8px;
+            cursor: pointer; box-shadow: 0 4px 10px rgba(33, 150, 243, 0.4);
+            transition: background-color 0.2s ease;
+        }
+        .overlay-screen button:hover { background-color: #1976d2; }
+    </style>
+
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <div id="start-screen" class="overlay-screen">
+            <h1>Murat Şener Drift Yarışı</h1>
+            <p>Virajlı pistte drift at, rakipleri geç ve en iyi skoru yap!</p>
+            <button id="startGameButton">OYUNA BAŞLA</button>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="info-panel" style="display: none;">
+            <div class="info-item">Hız: <span id="speedDisplay">0</span> km/s</div>
+            <div class="info-item">Skor: <span id="scoreDisplay">0</span></div>
+            <div class="info-item">Drift: <span id="driftScoreDisplay">0</span></div>
+        </div>
+
+        <div id="controls" style="display: none;">
+            <div class="control-group">
+                <div id="leftButton" class="control-button">⬅️</div>
+                <div id="rightButton" class="control-button">➡️</div>
+            </div>
+            <div class="control-group">
+                <div id="accelerateButton" class="control-button">⬆️</div>
+                <div id="brakeButton" class="control-button">⬇️</div>
+            </div>
+        </div>
+
+        <div id="end-screen" class="overlay-screen" style="display: none;">
+            <h1>OYUN BİTTİ!</h1>
+            <p>Final Skorunuz: <span id="finalScoreDisplay">0</span></p>
+            <p>En İyi Drift Skoru: <span id="finalDriftScoreDisplay">0</span></p>
+            <button id="restartGameButton">YENİDEN BAŞLA</button>
+        </div>
+    </div>
+
+    <script>
+        // JavaScript kodu buraya gelecek
+        const gameCanvas = document.getElementById('gameCanvas');
+        const ctx = gameCanvas.getContext('2d');
+
+        const startScreen = document.getElementById('start-screen');
+        const endScreen = document.getElementById('end-screen');
+        const infoPanel = document.getElementById('info-panel');
+        const controls = document.getElementById('controls');
+
+        const startGameButton = document.getElementById('startGameButton');
+        const restartGameButton = document.getElementById('restartGameButton');
+
+        const speedDisplay = document.getElementById('speedDisplay');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const driftScoreDisplay = document.getElementById('driftScoreDisplay');
+        const finalScoreDisplay = document.getElementById('finalScoreDisplay');
+        const finalDriftScoreDisplay = document.getElementById('finalDriftScoreDisplay');
+
+        // Kontrol düğmeleri
+        const leftButton = document.getElementById('leftButton');
+        const rightButton = document.getElementById('rightButton');
+        const accelerateButton = document.getElementById('accelerateButton');
+        const brakeButton = document.getElementById('brakeButton');
+
+        let gameRunning = false;
+        let animationFrameId;
+
+        // Oyun Ayarları
+        const GAME_WIDTH = 320; // Mobil uyumluluk için daha düşük başlangıç genişliği
+        const GAME_HEIGHT = 400; // Mobil uyumluluk için daha düşük başlangıç yüksekliği
+        const SEGMENT_LENGTH = 200; // Pist segmentlerinin uzunluğu
+        const ROAD_WIDTH = 200;
+        const RUMBLE_STRIPE_WIDTH = 30; // Kenar tırtıkları
+        const DRAW_DISTANCE = 300; // Ne kadar ileri çizileceği
+        const CAMERA_DEPTH = 0.8; // Kamera derinliği (3D hissi için)
+        const FOG_DENSITY = 3; // Uzaklığa göre sis yoğunluğu
+
+        // Araba Ayarları
+        const CAR_WIDTH = 40;
+        const CAR_HEIGHT = 20;
+        let carX = 0; // Merkeze göre arabanın X pozisyonu
+        let carZ = 0; // Kameraya göre arabanın Z pozisyonu
+        let speed = 0;
+        const MAX_SPEED = 100;
+        const ACCELERATION = 2;
+        const BRAKE_DECELERATION = 5;
+        const FRICTION = 0.5;
+        const TURN_SPEED = 0.05; // Dönüş hızı
+        const DRIFT_THRESHOLD = 0.1; // Drift için gerekli yan hız eşiği
+        let currentDriftAngle = 0; // Anlık drift açısı
+        let driftScore = 0;
+        let totalScore = 0;
+        let segmentPassed = 0;
+
+        // Tuş ve Dokunmatik Kontrol Durumları
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false,
+            ArrowUp: false,
+            ArrowDown: false
+        };
+        const touchControls = {
+            left: false,
+            right: false,
+            accelerate: false,
+            brake: false
+        };
+
+        // Pist Yapısı
+        let trackSegments = [];
+        let playerZ = 0; // Oyuncunun pistteki mutlak Z pozisyonu
+
+        // Pist Segmenti Oluşturma Fonksiyonu
+        function createSegment(z, curve = 0, y = 0) {
+            return {
+                z: z,
+                curve: curve, // Viraj değeri (-1 sola, 1 sağa)
+                y: y,       // Yükseklik (yokuşlar için)
+                color: { road: '#6a6a6a', grass: '#009a00', rumble: '#dc0000', stripe: '#ffffff' }
+            };
+        }
+
+        // Pist Oluşturma Fonksiyonu
+        function createTrack() {
+            trackSegments = [];
+            playerZ = 0;
+            let currentCurve = 0;
+            let currentY = 0;
+
+            // Düz başlangıç
+            for (let i = 0; i < 50; i++) {
+                trackSegments.push(createSegment(i * SEGMENT_LENGTH));
+            }
+
+            // Virajlı bölüm
+            for (let i = 0; i < 100; i++) {
+                currentCurve = Math.sin(i * 0.05) * 0.7; // Sinüs dalgası ile virajlar
+                currentY = Math.sin(i * 0.02) * 20; // Hafif yokuşlar
+                trackSegments.push(createSegment((i + 50) * SEGMENT_LENGTH, currentCurve, currentY));
+            }
+
+            // Daha fazla düz ve viraj
+            for (let i = 0; i < 50; i++) {
+                trackSegments.push(createSegment((i + 150) * SEGMENT_LENGTH));
+            }
+
+            // Bir bitiş çizgisi ekleyelim
+            trackSegments[trackSegments.length - 1].color.road = '#fff';
+            trackSegments[trackSegments.length - 1].color.rumble = '#000';
+            trackSegments[trackSegments.length - 2].color.road = '#fff';
+            trackSegments[trackSegments.length - 2].color.rumble = '#000';
+
+            // Pistin sonunu biraz daha ileri taşımak için
+            for (let i = 0; i < 10; i++) {
+                 trackSegments.push(createSegment((trackSegments.length + i) * SEGMENT_LENGTH));
+            }
+        }
+
+        // 3D Perspektif Projeksiyonu
+        function project(p, cameraX, cameraY, cameraZ, cameraDepth, width, height) {
+            const perspective = cameraDepth / (p.z - cameraZ);
+            p.x = (p.x - cameraX) * perspective;
+            p.y = (p.y - cameraY) * perspective;
+            p.w = perspective * width / 2; // Genişlik faktörü
+            p.h = perspective * height / 2; // Yükseklik faktörü
+            return p;
+        }
+
+        // Çizim Fonksiyonları
+        function drawQuad(x1, y1, w1, x2, y2, w2, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(x1 - w1, y1);
+            ctx.lineTo(x2 - w2, y2);
+            ctx.lineTo(x2 + w2, y2);
+            ctx.lineTo(x1 + w1, y1);
+            ctx.fill();
+        }
+
+        function drawCar(x, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x - width / 2, y - height, width, height);
+            // Basit bir araba şekli çizimi eklenebilir
+            ctx.fillStyle = '#ccc'; // Cam rengi
+            ctx.fillRect(x - width / 4, y - height - 5, width / 2, height / 3);
+        }
+
+        // Oyun Güncelleme Fonksiyonu
+        function update() {
+            if (!gameRunning) return;
+
+            // Araba Hareketi
+            let accelerateInput = touchControls.accelerate || keys.ArrowUp;
+            let brakeInput = touchControls.brake || keys.ArrowDown;
+            let leftInput = touchControls.left || keys.ArrowLeft;
+            let rightInput = touchControls.right || keys.ArrowRight;
+
+            if (accelerateInput) {
+                speed += ACCELERATION;
+            } else if (brakeInput) {
+                speed -= BRAKE_DECELERATION;
+            }
+            speed -= FRICTION; // Sürtünme
+            speed = Math.max(0, Math.min(speed, MAX_SPEED));
+
+            playerZ += speed; // Oyuncunun pistteki ilerlemesi
+            totalScore += Math.floor(speed / 100); // Hıza göre skor
+
+            // Pistin sonuna gelindi mi?
+            if (playerZ >= (trackSegments.length - DRAW_DISTANCE - 5) * SEGMENT_LENGTH) {
+                 gameOver(true);
+                 return;
+            }
+
+            // Kamera konumu ve pist kaydırma
+            let currentSegmentIndex = Math.floor(playerZ / SEGMENT_LENGTH);
+            let currentSegment = trackSegments[currentSegmentIndex];
+            let nextSegment = trackSegments[currentSegmentIndex + 1];
+
+            // Viraj efekti
+            let curveFactor = 0;
+            if (currentSegment && nextSegment) {
+                let segmentProgress = (playerZ % SEGMENT_LENGTH) / SEGMENT_LENGTH;
+                curveFactor = currentSegment.curve + (nextSegment.curve - currentSegment.curve) * segmentProgress;
+            }
+            carX -= curveFactor * speed * 0.05; // Viraja göre arabanın X pozisyonu
+
+            // Yana doğru hareket (drift veya direksiyon)
+            let turnAmount = 0;
+            if (leftInput) {
+                turnAmount = -TURN_SPEED;
+            } else if (rightInput) {
+                turnAmount = TURN_SPEED;
+            }
+            carX += turnAmount * speed * 0.1; // Hıza göre dönüş
+
+            // Drift hesaplama (basit versiyon)
+            let sideSpeed = Math.abs(turnAmount * speed * 0.1);
+            if (sideSpeed > DRIFT_THRESHOLD && accelerateInput) {
+                currentDriftAngle += turnAmount * 5; // Drift açısını artır
+                driftScore += Math.floor(sideSpeed); // Drift skorunu ekle
+                // currentDriftAngle'ı belirli bir aralıkta tut
+                currentDriftAngle = Math.max(-45, Math.min(45, currentDriftAngle));
+            } else {
+                currentDriftAngle *= 0.9; // Drift açısını yavaşça sıfırla
+            }
+
+            // Pist dışına çıkma kontrolü (Basit)
+            const edge = ROAD_WIDTH / 2 + RUMBLE_STRIPE_WIDTH;
+            if (Math.abs(carX) > edge + 10) { // Pist dışına çok çıkınca yavaşla
+                speed *= 0.9;
+                totalScore -= 1; // Ceza
+            }
+            carX = Math.max(-edge, Math.min(edge, carX)); // Pist içinde tut
+
+            // Render (Çizim)
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            // Pist Çizimi (Arkadan öne doğru)
+            for (let i = DRAW_DISTANCE; i > 0; i--) {
+                let segmentIndex = currentSegmentIndex + i;
+                if (segmentIndex >= trackSegments.length) continue;
+
+                let p1 = project({ x: carX, y: currentSegment.y, z: trackSegments[segmentIndex].z }, carX, currentSegment.y, playerZ, CAMERA_DEPTH, GAME_WIDTH, GAME_HEIGHT);
+                let p2 = project({ x: carX, y: (trackSegments[segmentIndex + 1] ? trackSegments[segmentIndex + 1].y : currentSegment.y), z: (trackSegments[segmentIndex + 1] ? trackSegments[segmentIndex + 1].z : trackSegments[segmentIndex].z + SEGMENT_LENGTH) }, carX, currentSegment.y, playerZ, CAMERA_DEPTH, GAME_WIDTH, GAME_HEIGHT);
+
+                // Sis efekti
+                let fog = 1 - (i / DRAW_DISTANCE); // Daha yakına göre daha az sis
+                fog = Math.pow(fog, FOG_DENSITY); // Sis yoğunluğunu ayarla
+                let fogColor = `rgba(51, 51, 51, ${fog})`; // Koyu gri sis
+
+                // Çim
+                drawQuad(0, p1.y, GAME_WIDTH, 0, p2.y, GAME_WIDTH, '#009a00');
+
+                // Rumble şeritler (pist kenarı)
+                drawQuad(p1.x, p1.y, p1.w * (ROAD_WIDTH + RUMBLE_STRIPE_WIDTH) / ROAD_WIDTH,
+                         p2.x, p2.y, p2.w * (ROAD_WIDTH + RUMBLE_STRIPE_WIDTH) / ROAD_WIDTH, '#dc0000');
+
+                // Yol
+                drawQuad(p1.x, p1.y, p1.w, p2.x, p2.y, p2.w, '#6a6a6a');
+
+                // Yol Ortası Çizgisi (Çok basit bir versiyon)
+                if (i % 5 === 0) { // Her 5 segmentte bir çizgi
+                    drawQuad(p1.x, p1.y, p1.w * 0.05, p2.x, p2.y, p2.w * 0.05, '#ffffff');
+                }
+
+                // Sis efekti çizim üzerine
+                ctx.fillStyle = fogColor;
+                ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            }
+
+            // Araba Çizimi (Sabit ekran pozisyonu)
+            let carDrawX = GAME_WIDTH / 2;
+            let carDrawY = GAME_HEIGHT - 30; // Ekranın altında
+            ctx.save();
+            ctx.translate(carDrawX, carDrawY);
+            ctx.rotate(currentDriftAngle * Math.PI / 180); // Drift açısına göre döndür
+            drawCar(0, 0, CAR_WIDTH, CAR_HEIGHT, '#e74c3c'); // Kırmızı araba
+            ctx.restore();
+
+            // Bilgileri Güncelle
+            speedDisplay.textContent = Math.floor(speed);
+            scoreDisplay.textContent = totalScore;
+            driftScoreDisplay.textContent = driftScore;
+
+            animationFrameId = requestAnimationFrame(update);
+        }
+
+        // Oyun Başlatma
+        function startGame() {
+            startScreen.style.display = 'none';
+            endScreen.style.display = 'none';
+            infoPanel.style.display = 'flex';
+            controls.style.display = 'flex';
+            
+            gameCanvas.width = GAME_WIDTH;
+            gameCanvas.height = GAME_HEIGHT;
+
+            createTrack();
+            resetGame();
+            gameRunning = true;
+            animationFrameId = requestAnimationFrame(update);
+        }
+
+        // Oyunu Sıfırlama
+        function resetGame() {
+            carX = 0;
+            carZ = 0;
+            speed = 0;
+            driftScore = 0;
+            totalScore = 0;
+            playerZ = 0;
+            currentDriftAngle = 0;
+        }
+
+        // Oyun Bitti
+        function gameOver(completed = false) {
+            gameRunning = false;
+            cancelAnimationFrame(animationFrameId);
+            infoPanel.style.display = 'none';
+            controls.style.display = 'none';
+            endScreen.style.display = 'flex';
+            finalScoreDisplay.textContent = totalScore;
+            finalDriftScoreDisplay.textContent = driftScore;
+            if (completed) {
+                endScreen.querySelector('h1').textContent = "PİSTİ TAMAMLADIN!";
+            } else {
+                endScreen.querySelector('h1').textContent = "OYUN BİTTİ!";
+            }
+        }
+
+        // Olay Dinleyicileri
+        startGameButton.addEventListener('click', startGame);
+        restartGameButton.addEventListener('click', startGame); // Yeniden başlat düğmesi
+
+        // Klavye Kontrolleri
+        document.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.key)) {
+                keys[e.key] = true;
+                e.preventDefault(); // Varsayılan tarayıcı davranışını engelle
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) {
+                keys[e.key] = false;
+                e.preventDefault();
+            }
+        });
+
+        // Mobil Dokunmatik Kontroller
+        function setupTouchButton(button, action) {
+            button.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                touchControls[action] = true;
+            }, { passive: false });
+            button.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                touchControls[action] = false;
+            }, { passive: false });
+        }
+
+        setupTouchButton(leftButton, 'left');
+        setupTouchButton(rightButton, 'right');
+        setupTouchButton(accelerateButton, 'accelerate');
+        setupTouchButton(brakeButton, 'brake');
+
+        // PWA Service Worker Kaydı (önceki projedeki gibi)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+
+    </script>
+</body>
+</html>
+```http://googleusercontent.com/image_generation_content/26
