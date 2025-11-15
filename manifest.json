@@ -1,0 +1,21 @@
+{
+    "name": "Murat Şener Hafıza Oyunu",
+    "short_name": "Hafıza Oyunu",
+    "description": "Murat Şener'in geliştirmiş olduğu eğlenceli hafıza eşleştirme oyunu.",
+    "start_url": "/HafizaOyunu.html",
+    "display": "standalone",
+    "background_color": "#c6e2ff",
+    "theme_color": "#c6e2ff",
+    "icons": [
+        {
+            "src": "/icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icon-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
